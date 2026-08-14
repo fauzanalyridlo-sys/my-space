@@ -8,15 +8,15 @@ datasource db {
 }
 
 model User {
-  id           Int              @id @default(autoincrement())
-  email        String           @unique
-  passwordHash String
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-
-  notes        Note[]
-  reflections  DailyReflection[]
-  checkIns     DailyCheckIn[]
+  id              Int               @id @default(autoincrement())
+  email           String            @unique
+  passwordHash    String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  checkIns        DailyCheckIn[]
+  reflections     DailyReflection[]
+  notes           Note[]
+  aiConversations AiConversation[]
 }
 
 model Note {
@@ -25,8 +25,8 @@ model Note {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-userId Int
-user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model DailyReflection {
@@ -39,8 +39,8 @@ model DailyReflection {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  userId          Int
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
 }
@@ -55,8 +55,29 @@ model DailyCheckIn {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  userId     Int
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
+}
+
+model AiConversation {
+  id        Int      @id @default(autoincrement())
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    Int
+
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+}
+
+model AiMessage {
+  id             Int      @id @default(autoincrement())
+  role           String
+  content        String
+  createdAt      DateTime @default(now())
+  conversationId Int
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
