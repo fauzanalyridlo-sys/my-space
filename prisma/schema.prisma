@@ -7,20 +7,56 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id           Int              @id @default(autoincrement())
+  email        String           @unique
+  passwordHash String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  notes        Note[]
+  reflections  DailyReflection[]
+  checkIns     DailyCheckIn[]
+}
+
 model Note {
   id        Int      @id @default(autoincrement())
   content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+userId Int
+user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model DailyReflection {
   id              Int      @id @default(autoincrement())
-  date            DateTime @unique
+  date            DateTime
   howWasYourDay   String
   whatDidYouLearn String
   tomorrow        String
   letGo           String
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  userId          Int
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+}
+
+model DailyCheckIn {
+  id         Int      @id @default(autoincrement())
+  date       DateTime
+  mood       Int
+  energy     Int
+  sleepHours Float?
+  activities String[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
 }

@@ -1,9 +1,21 @@
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import NoteEditor from "./components/NoteEditor";
 import NoteCard from "./components/NoteCard";
 
 export default async function Home() {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    return null;
+  }
+
+  const userId = Number(session.user.id);
+
   const notes = await prisma.note.findMany({
+    where: {
+      userId,
+    },
     orderBy: {
       createdAt: "desc",
     },

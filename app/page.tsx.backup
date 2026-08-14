@@ -1,0 +1,137 @@
+import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import NoteEditor from "./components/NoteEditor";
+import NoteCard from "./components/NoteCard";
+
+export default async function Home() {
+  const notes = await prisma.note.findMany({
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 5,
+  });
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const todayReflection = await prisma.dailyReflection.findUnique({
+    where: {
+      date: today,
+    },
+  });
+
+  return (
+    <main className="min-h-screen">
+      <div className="mx-auto max-w-5xl px-6 py-10">
+        {/* Greeting */}
+        <section>
+          <p className="text-sm text-zinc-500">
+            Your personal space
+          </p>
+
+          <h1 className="mt-2 text-4xl font-bold tracking-tight">
+            My Space
+          </h1>
+
+          <p className="mt-3 max-w-xl text-zinc-500">
+            Tempat untuk mencatat apa yang ada di pikiranmu,
+            menyimpan hal-hal penting, dan melihat kembali
+            perjalananmu.
+          </p>
+        </section>
+
+        {/* Quick Actions */}
+        <section className="mt-10 grid gap-4 sm:grid-cols-2">
+          <Link
+            href="/reflection"
+            className="group rounded-2xl border border-zinc-800 bg-zinc-900 p-6 transition hover:border-zinc-600"
+          >
+            <p className="text-sm text-zinc-500">
+              Daily Reflection
+            </p>
+
+            <h2 className="mt-2 text-xl font-semibold">
+              {todayReflection
+                ? "Continue today's reflection"
+                : "Reflect on today"}
+            </h2>
+
+            <p className="mt-2 text-sm text-zinc-500">
+              Luangkan beberapa menit untuk melihat kembali
+              harimu.
+            </p>
+
+            <span className="mt-5 inline-block text-sm text-zinc-300 group-hover:text-white">
+              Open reflection →
+            </span>
+          </Link>
+
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+            <p className="text-sm text-zinc-500">
+              Coming later
+            </p>
+
+            <h2 className="mt-2 text-xl font-semibold">
+              My Space
+            </h2>
+
+            <p className="mt-2 text-sm text-zinc-500">
+              Tempat untuk fitur-fitur personal lainnya.
+            </p>
+          </div>
+        </section>
+
+        {/* Notes */}
+        <section className="mt-12">
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-sm text-zinc-500">
+                Thoughts & Ideas
+              </p>
+
+              <h2 className="mt-1 text-2xl font-semibold">
+                Notes
+              </h2>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <NoteEditor />
+          </div>
+
+          <div className="mt-8 space-y-4">
+            {notes.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-zinc-800 p-8 text-center">
+                <p className="text-zinc-500">
+                  Belum ada catatan.
+                </p>
+
+                <p className="mt-1 text-sm text-zinc-600">
+                  Tulis sesuatu yang sedang ada di pikiranmu.
+                </p>
+              </div>
+            ) : (
+              notes.map((note) => (
+                <NoteCard
+                  key={note.id}
+                  id={note.id}
+                  content={note.content}
+                />
+              ))
+            )}
+            {notes.length > 0 && (
+  <div className="mt-6">
+    <Link
+      href="/notes"
+      className="text-sm text-zinc-400 hover:text-white"
+    >
+      View all notes →
+    </Link>
+  </div>
+)}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
