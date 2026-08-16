@@ -17,6 +17,7 @@ model User {
   reflections     DailyReflection[]
   notes           Note[]
   aiConversations AiConversation[]
+  aiMemories      AiMemory[]
 }
 
 model Note {
@@ -80,4 +81,17 @@ model AiMessage {
   conversationId Int
 
   conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model AiMemory {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  key       String
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
 }
