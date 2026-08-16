@@ -1,13 +1,13 @@
 import OpenAI from "openai";
-import { GoogleGenAI } from "@google/genai";
 
 const openrouter = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
   baseURL: "https://openrouter.ai/api/v1",
 });
 
-const gemini = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+const cerebras = new OpenAI({
+  apiKey: process.env.CEREBRAS_API_KEY,
+  baseURL: "https://api.cerebras.ai/v1",
 });
 
 export type AIMessage = {
@@ -49,11 +49,11 @@ Kamu adalah My Space AI, asisten pribadi di aplikasi My Space.
 Tugasmu:
 - Membantu user memahami pola dari data yang tersedia di My Space.
 - Jawab dengan ramah, natural, jelas, dan tidak menghakimi.
-- Gunakan data My Space hanya jika relevan dengan pertanyaan user.
 - Jawab pertanyaan umum user secara langsung.
 - Tidak semua pertanyaan harus dikaitkan dengan data My Space.
+- Gunakan data My Space hanya jika relevan dengan pertanyaan user.
 - Bedakan fakta yang benar-benar ada di data dengan interpretasi atau kemungkinan.
-- Jika menyebut pola atau kecenderungan, gunakan bahasa yang hati-hati seperti "terlihat", "mungkin", atau "berdasarkan data yang tersedia".
+- Jika menyebut pola atau kecenderungan, gunakan bahasa hati-hati seperti "terlihat", "mungkin", atau "berdasarkan data yang tersedia".
 - Jangan menganggap satu atau beberapa data sebagai bukti pasti tentang kebiasaan, kondisi, atau kepribadian user.
 - Jangan membuat diagnosis medis atau psikologis.
 - Jangan mengarang data, angka, tanggal, aktivitas, kebiasaan, atau kejadian yang tidak tersedia.
@@ -71,9 +71,11 @@ ${JSON.stringify(memories ?? [], null, 2)}
 `;
 }
 
-function shouldFallbackToGemini(error: unknown) {
+function shouldFallbackToCerebras(error: unknown) {
   if (error instanceof OpenAI.APIError) {
     return (
+      error.status === 408 ||
+      error.status === 409 ||
       error.status === 429 ||
       error.status === 500 ||
       error.status === 502 ||
@@ -82,7 +84,7 @@ function shouldFallbackToGemini(error: unknown) {
     );
   }
 
-  // Network error / error yang tidak punya status HTTP
+  // Network error atau error lain yang tidak mempunyai status HTTP.
   return true;
 }
 
@@ -107,51 +109,23 @@ async function askOpenRouter(
   return reply;
 }
 
-async function askGemini(
+async function askCerebras(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
 ) {
-  console.log("AI: mencoba Gemini...");
+  console.log("AI: mencoba Cerebras...");
 
-  const systemMessage = messages.find(
-    (message) => message.role === "system",
-  );
-
-  const conversationMessages = messages.filter(
-    (message) => message.role !== "system",
-  );
-
-  const prompt = conversationMessages
-    .map((message) => {
-      const role =
-        message.role === "assistant" ? "Assistant" : "User";
-
-      const content =
-        typeof message.content === "string"
-          ? message.content
-          : JSON.stringify(message.content);
-
-      return `${role}: ${content}`;
-    })
-    .join("\n\n");
-
-  const response = await gemini.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-    config: {
-      systemInstruction:
-        typeof systemMessage?.content === "string"
-          ? systemMessage.content
-          : undefined,
-    },
+  const response = await cerebras.chat.completions.create({
+    model: "llama-3.1-8b",
+    messages,
   });
 
-  const reply = response.text;
+  const reply = response.choices[0]?.message?.content;
 
   if (!reply) {
-    throw new Error("Gemini mengembalikan jawaban kosong.");
+    throw new Error("Cerebras mengembalikan jawaban kosong.");
   }
 
-  console.log("AI: Gemini berhasil");
+  console.log("AI: Cerebras berhasil");
 
   return reply;
 }
@@ -187,24 +161,26 @@ export async function chatWithAI(
   } catch (openrouterError) {
     console.error("OPENROUTER ERROR:", openrouterError);
 
-    if (!shouldFallbackToGemini(openrouterError)) {
+    if (!shouldFallbackToCerebras(openrouterError)) {
       throw openrouterError;
     }
 
-    console.log("AI: OpenRouter gagal, pindah ke Gemini...");
+    console.log(
+      "AI: OpenRouter gagal, pindah ke Cerebras...",
+    );
   }
 
   // ==========================================
-  // 2. GEMINI — FALLBACK
+  // 2. CEREBRAS — FALLBACK
   // ==========================================
 
   try {
-    return await askGemini(requestMessages);
-  } catch (geminiError) {
-    console.error("GEMINI ERROR:", geminiError);
+    return await askCerebras(requestMessages);
+  } catch (cerebrasError) {
+    console.error("CEREBRAS ERROR:", cerebrasError);
 
     throw new Error(
-      "Semua provider AI sedang tidak tersedia. OpenRouter dan Gemini gagal memberikan jawaban.",
+      "Semua provider AI sedang tidak tersedia. OpenRouter dan Cerebras gagal memberikan jawaban.",
     );
   }
 }
