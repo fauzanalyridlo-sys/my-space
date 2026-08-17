@@ -1,13 +1,8 @@
 import OpenAI from "openai";
 
-const openrouter = new OpenAI({
+const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
   baseURL: "https://openrouter.ai/api/v1",
-});
-
-const cerebras = new OpenAI({
-  apiKey: process.env.CEREBRAS_API_KEY,
-  baseURL: "https://api.cerebras.ai/v1",
 });
 
 export type AIMessage = {
@@ -53,7 +48,7 @@ Tugasmu:
 - Tidak semua pertanyaan harus dikaitkan dengan data My Space.
 - Gunakan data My Space hanya jika relevan dengan pertanyaan user.
 - Bedakan fakta yang benar-benar ada di data dengan interpretasi atau kemungkinan.
-- Jika menyebut pola atau kecenderungan, gunakan bahasa hati-hati seperti "terlihat", "mungkin", atau "berdasarkan data yang tersedia".
+- Jika menyebut pola atau kecenderungan, gunakan bahasa yang hati-hati seperti "terlihat", "mungkin", atau "berdasarkan data yang tersedia".
 - Jangan menganggap satu atau beberapa data sebagai bukti pasti tentang kebiasaan, kondisi, atau kepribadian user.
 - Jangan membuat diagnosis medis atau psikologis.
 - Jangan mengarang data, angka, tanggal, aktivitas, kebiasaan, atau kejadian yang tidak tersedia.
@@ -71,65 +66,6 @@ ${JSON.stringify(memories ?? [], null, 2)}
 `;
 }
 
-function shouldFallbackToCerebras(error: unknown) {
-  if (error instanceof OpenAI.APIError) {
-    return (
-      error.status === 408 ||
-      error.status === 409 ||
-      error.status === 429 ||
-      error.status === 500 ||
-      error.status === 502 ||
-      error.status === 503 ||
-      error.status === 504
-    );
-  }
-
-  // Network error atau error lain yang tidak mempunyai status HTTP.
-  return true;
-}
-
-async function askOpenRouter(
-  messages: OpenAI.Chat.ChatCompletionMessageParam[],
-) {
-  console.log("AI: mencoba OpenRouter...");
-
-  const response = await openrouter.chat.completions.create({
-    model: "openrouter/free",
-    messages,
-  });
-
-  const reply = response.choices[0]?.message?.content;
-
-  if (!reply) {
-    throw new Error("OpenRouter mengembalikan jawaban kosong.");
-  }
-
-  console.log("AI: OpenRouter berhasil");
-
-  return reply;
-}
-
-async function askCerebras(
-  messages: OpenAI.Chat.ChatCompletionMessageParam[],
-) {
-  console.log("AI: mencoba Cerebras...");
-
-  const response = await cerebras.chat.completions.create({
-    model: "llama-3.1-8b",
-    messages,
-  });
-
-  const reply = response.choices[0]?.message?.content;
-
-  if (!reply) {
-    throw new Error("Cerebras mengembalikan jawaban kosong.");
-  }
-
-  console.log("AI: Cerebras berhasil");
-
-  return reply;
-}
-
 export async function chatWithAI(
   messages: AIMessage[],
   context?: AIContext,
@@ -144,43 +80,22 @@ export async function chatWithAI(
 
   const systemPrompt = buildSystemPrompt(context, memories);
 
-  const requestMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    {
-      role: "system",
-      content: systemPrompt,
-    },
-    ...messages,
-  ];
+  const response = await openai.chat.completions.create({
+    model: "openrouter/free",
+    messages: [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
+      ...messages,
+    ],
+  });
 
-  // ==========================================
-  // 1. OPENROUTER — PROVIDER UTAMA
-  // ==========================================
+  const reply = response.choices[0]?.message?.content;
 
-  try {
-    return await askOpenRouter(requestMessages);
-  } catch (openrouterError) {
-    console.error("OPENROUTER ERROR:", openrouterError);
-
-    if (!shouldFallbackToCerebras(openrouterError)) {
-      throw openrouterError;
-    }
-
-    console.log(
-      "AI: OpenRouter gagal, pindah ke Cerebras...",
-    );
+  if (!reply) {
+    throw new Error("OpenRouter mengembalikan jawaban kosong.");
   }
 
-  // ==========================================
-  // 2. CEREBRAS — FALLBACK
-  // ==========================================
-
-  try {
-    return await askCerebras(requestMessages);
-  } catch (cerebrasError) {
-    console.error("CEREBRAS ERROR:", cerebrasError);
-
-    throw new Error(
-      "Semua provider AI sedang tidak tersedia. OpenRouter dan Cerebras gagal memberikan jawaban.",
-    );
-  }
+  return reply;
 }
