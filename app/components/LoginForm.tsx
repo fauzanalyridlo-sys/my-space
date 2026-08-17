@@ -48,7 +48,7 @@ export default function LoginForm() {
       <div className="group">
         <label
           htmlFor="email"
-          className="mb-2 block text-sm font-medium text-zinc-900"
+          className="mb-2 block text-sm font-medium text-white-900"
         >
           Email
         </label>
@@ -108,7 +108,7 @@ export default function LoginForm() {
       <div className="group">
         <label
           htmlFor="password"
-          className="mb-2 block text-sm font-medium text-zinc-900"
+          className="mb-2 block text-sm font-medium text-white-900"
         >
           Password
         </label>
