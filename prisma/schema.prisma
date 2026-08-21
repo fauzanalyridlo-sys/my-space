@@ -129,17 +129,21 @@ model Alarm {
 }
 
 model IotDevice {
-  id          Int            @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   name        String
-  deviceToken String         @unique
-  enabled     Boolean        @default(true)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  deviceToken String   @unique
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  userId      Int
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+  user   User @relation(
+    fields: [userId],
+    references: [id],
+    onDelete: Cascade
+  )
 
-  musicState  IotMusicState?
+  musicState IotMusicState?
 }
 
 model IotMusicState {
