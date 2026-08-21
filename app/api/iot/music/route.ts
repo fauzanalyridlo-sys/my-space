@@ -1,6 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
+
+import {
+  auth,
+} from "@/auth";
+
+import {
+  prisma,
+} from "@/lib/prisma";
 
 // ======================================================
 // TYPE
@@ -35,19 +44,26 @@ const EMPTY_MUSIC_STATE: MusicStateResponse = {
 //
 // Digunakan ESP32.
 //
-// ESP32 mengirim:
-// x-iot-token: DEVICE_TOKEN
+// Header:
 //
-// API mencari device berdasarkan token,
-// kemudian mengambil music state milik device tersebut.
+// x-iot-token: DEVICE_TOKEN
 // ======================================================
 
 export async function GET(
   request: NextRequest,
 ) {
   try {
+
+    console.log(
+      "========================================",
+    );
+
+    console.log(
+      "GET /api/iot/music",
+    );
+
     // ==================================================
-    // AMBIL IOT TOKEN
+    // AMBIL TOKEN
     // ==================================================
 
     const token =
@@ -55,11 +71,25 @@ export async function GET(
         "x-iot-token",
       );
 
-    if (!token) {
+    console.log(
+      "IoT GET token received:",
+      token
+        ? `${token.substring(0, 8)}...`
+        : "MISSING",
+    );
+
+    if (
+      !token
+    ) {
+      console.log(
+        "IoT GET ERROR: Missing token",
+      );
+
       return NextResponse.json(
         {
           success: false,
-          error: "Missing IoT token.",
+          error:
+            "Missing IoT token.",
         },
         {
           status: 401,
@@ -68,18 +98,22 @@ export async function GET(
     }
 
     // ==================================================
-    // CARI DEVICE
+    // CARI DEVICE BERDASARKAN TOKEN
     // ==================================================
 
     const device =
       await prisma.iotDevice.findUnique({
         where: {
-          deviceToken: token,
+          deviceToken:
+            token,
         },
 
         select: {
           id: true,
+          name: true,
           enabled: true,
+          userId: true,
+          deviceToken: true,
         },
       });
 
@@ -87,11 +121,18 @@ export async function GET(
     // DEVICE TIDAK DITEMUKAN
     // ==================================================
 
-    if (!device) {
+    if (
+      !device
+    ) {
+      console.log(
+        "IoT GET ERROR: Invalid token",
+      );
+
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid IoT token.",
+          error:
+            "Invalid IoT token.",
         },
         {
           status: 401,
@@ -100,14 +141,45 @@ export async function GET(
     }
 
     // ==================================================
-    // DEVICE DINONAKTIFKAN
+    // DEBUG DEVICE
     // ==================================================
 
-    if (!device.enabled) {
+    console.log(
+      "IoT GET device found:",
+      {
+        deviceId:
+          device.id,
+
+        deviceName:
+          device.name,
+
+        userId:
+          device.userId,
+
+        enabled:
+          device.enabled,
+
+        deviceToken:
+          device.deviceToken,
+      },
+    );
+
+    // ==================================================
+    // DEVICE DISABLED
+    // ==================================================
+
+    if (
+      !device.enabled
+    ) {
+      console.log(
+        "IoT GET ERROR: Device disabled",
+      );
+
       return NextResponse.json(
         {
           success: false,
-          error: "IoT device is disabled.",
+          error:
+            "IoT device is disabled.",
         },
         {
           status: 403,
@@ -116,54 +188,126 @@ export async function GET(
     }
 
     // ==================================================
-    // AMBIL MUSIC STATE
+    // AMBIL MUSIC STATE BERDASARKAN DEVICE ID
     // ==================================================
 
     const musicState =
       await prisma.iotMusicState.findUnique({
         where: {
-          deviceId: device.id,
+          deviceId:
+            device.id,
         },
       });
 
     // ==================================================
-    // BELUM ADA MUSIC STATE
+    // DEBUG MUSIC STATE
     // ==================================================
 
-    if (!musicState) {
+    console.log(
+      "IoT GET music state:",
+      {
+        deviceId:
+          device.id,
+
+        exists:
+          Boolean(
+            musicState,
+          ),
+
+        musicState,
+      },
+    );
+
+    // ==================================================
+    // BELUM ADA STATE
+    // ==================================================
+
+    if (
+      !musicState
+    ) {
+      console.log(
+        "IoT GET: No music state for deviceId:",
+        device.id,
+      );
+
       return NextResponse.json({
         success: true,
-        music: EMPTY_MUSIC_STATE,
+        music:
+          EMPTY_MUSIC_STATE,
       });
     }
 
     // ==================================================
-    // RESPONSE UNTUK ESP32
+    // RESPONSE ESP32
     // ==================================================
+
+    const response: MusicStateResponse = {
+      songId:
+        musicState.songId,
+
+      title:
+        musicState.title,
+
+      artist:
+        musicState.artist,
+
+      duration:
+        musicState.duration,
+
+      currentTime:
+        musicState.currentTime,
+
+      isPlaying:
+        musicState.isPlaying,
+
+      activeLyric:
+        musicState.activeLyric,
+    };
+
+    console.log(
+      "IoT GET SUCCESS:",
+      {
+        deviceId:
+          device.id,
+
+        songId:
+          response.songId,
+
+        title:
+          response.title,
+
+        currentTime:
+          response.currentTime,
+
+        isPlaying:
+          response.isPlaying,
+      },
+    );
+
+    console.log(
+      "========================================",
+    );
 
     return NextResponse.json({
       success: true,
-
-      music: {
-        songId: musicState.songId,
-        title: musicState.title,
-        artist: musicState.artist,
-        duration: musicState.duration,
-        currentTime: musicState.currentTime,
-        isPlaying: musicState.isPlaying,
-        activeLyric: musicState.activeLyric,
-      },
+      music:
+        response,
     });
-  } catch (error) {
+
+  } catch (
+    error
+  ) {
+
     console.error(
-      "GET /api/iot/music error:",
+      "GET /api/iot/music ERROR:",
       error,
     );
 
     return NextResponse.json(
       {
         success: false,
-        error: "Gagal mengambil state musik.",
+        error:
+          "Gagal mengambil state musik.",
       },
       {
         status: 500,
@@ -177,18 +321,25 @@ export async function GET(
 //
 // Digunakan WEB / MusicPlayer.
 //
-// POST tidak menggunakan IoT token.
+// User harus login.
 //
-// User harus login menggunakan NextAuth.
-//
-// State musik akan disimpan ke IotDevice milik
-// user yang sedang login.
+// Music state disimpan ke IotDevice
+// milik user yang sedang login.
 // ======================================================
 
 export async function POST(
   request: NextRequest,
 ) {
   try {
+
+    console.log(
+      "========================================",
+    );
+
+    console.log(
+      "POST /api/iot/music",
+    );
+
     // ==================================================
     // CEK SESSION
     // ==================================================
@@ -196,13 +347,31 @@ export async function POST(
     const session =
       await auth();
 
+    console.log(
+      "IoT POST session:",
+      {
+        userId:
+          session?.user?.id ??
+          null,
+
+        email:
+          session?.user?.email ??
+          null,
+      },
+    );
+
     if (
       !session?.user?.id
     ) {
+      console.log(
+        "IoT POST ERROR: Unauthorized",
+      );
+
       return NextResponse.json(
         {
           success: false,
-          error: "Unauthorized.",
+          error:
+            "Unauthorized.",
         },
         {
           status: 401,
@@ -211,7 +380,7 @@ export async function POST(
     }
 
     // ==================================================
-    // USER ID DARI SESSION
+    // USER ID
     // ==================================================
 
     const userId =
@@ -220,13 +389,24 @@ export async function POST(
       );
 
     if (
-      !Number.isInteger(userId) ||
+      !Number.isInteger(
+        userId,
+      ) ||
       userId <= 0
     ) {
+      console.log(
+        "IoT POST ERROR: Invalid user ID",
+        {
+          rawUserId:
+            session.user.id,
+        },
+      );
+
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid user session.",
+          error:
+            "Invalid user session.",
         },
         {
           status: 401,
@@ -235,14 +415,19 @@ export async function POST(
     }
 
     // ==================================================
-    // PARSE REQUEST BODY
+    // PARSE BODY
     // ==================================================
 
     const body =
       await request.json();
 
+    console.log(
+      "IoT POST body:",
+      body,
+    );
+
     // ==================================================
-    // AMBIL DATA MUSIC
+    // MUSIC DATA
     // ==================================================
 
     const songId =
@@ -296,10 +481,16 @@ export async function POST(
       ) ||
       duration < 0
     ) {
+      console.log(
+        "IoT POST ERROR: Invalid duration",
+        duration,
+      );
+
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid duration.",
+          error:
+            "Invalid duration.",
         },
         {
           status: 400,
@@ -317,10 +508,16 @@ export async function POST(
       ) ||
       currentTime < 0
     ) {
+      console.log(
+        "IoT POST ERROR: Invalid currentTime",
+        currentTime,
+      );
+
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid currentTime.",
+          error:
+            "Invalid currentTime.",
         },
         {
           status: 400,
@@ -330,25 +527,12 @@ export async function POST(
 
     // ==================================================
     // CARI DEVICE MILIK USER
-    //
-    // INI BAGIAN PENTING.
-    //
-    // Tidak lagi menggunakan:
-    //
-    // findFirst({
-    //   where: {
-    //     enabled: true
-    //   }
-    // })
-    //
-    // Karena itu bisa mengambil device user lain.
     // ==================================================
 
-    const device =
-      await prisma.iotDevice.findFirst({
+    const devices =
+      await prisma.iotDevice.findMany({
         where: {
           userId,
-          enabled: true,
         },
 
         orderBy: {
@@ -357,14 +541,69 @@ export async function POST(
 
         select: {
           id: true,
+          name: true,
+          enabled: true,
+          userId: true,
+          deviceToken: true,
         },
       });
 
     // ==================================================
-    // USER BELUM MEMILIKI DEVICE
+    // DEBUG SEMUA DEVICE USER
     // ==================================================
 
-    if (!device) {
+    console.log(
+      "IoT POST user devices:",
+      devices.map(
+        (
+          device
+        ) => ({
+          id:
+            device.id,
+
+          name:
+            device.name,
+
+          enabled:
+            device.enabled,
+
+          userId:
+            device.userId,
+
+          deviceToken:
+            device.deviceToken,
+        }),
+      ),
+    );
+
+    // ==================================================
+    // CARI DEVICE AKTIF
+    // ==================================================
+
+    const device =
+      devices.find(
+        (
+          item
+        ) =>
+          item.enabled,
+      );
+
+    // ==================================================
+    // DEVICE TIDAK ADA
+    // ==================================================
+
+    if (
+      !device
+    ) {
+      console.log(
+        "IoT POST ERROR: No active device",
+        {
+          userId,
+          totalDevices:
+            devices.length,
+        },
+      );
+
       return NextResponse.json(
         {
           success: false,
@@ -378,13 +617,38 @@ export async function POST(
     }
 
     // ==================================================
+    // DEBUG DEVICE YANG DIPILIH
+    // ==================================================
+
+    console.log(
+      "IoT POST selected device:",
+      {
+        deviceId:
+          device.id,
+
+        deviceName:
+          device.name,
+
+        userId:
+          device.userId,
+
+        enabled:
+          device.enabled,
+
+        deviceToken:
+          device.deviceToken,
+      },
+    );
+
+    // ==================================================
     // UPSERT MUSIC STATE
     // ==================================================
 
     const musicState =
       await prisma.iotMusicState.upsert({
         where: {
-          deviceId: device.id,
+          deviceId:
+            device.id,
         },
 
         update: {
@@ -398,7 +662,9 @@ export async function POST(
         },
 
         create: {
-          deviceId: device.id,
+          deviceId:
+            device.id,
+
           songId,
           title,
           artist,
@@ -410,21 +676,46 @@ export async function POST(
       });
 
     // ==================================================
-    // LOG
+    // DEBUG DATA TERSIMPAN
     // ==================================================
 
     console.log(
-      "IoT music state updated:",
+      "IoT POST MUSIC SAVED:",
       {
-        userId,
-        deviceId: device.id,
-        songId,
-        title,
-        artist,
-        duration,
-        currentTime,
-        isPlaying,
+        musicStateId:
+          musicState.id,
+
+        deviceId:
+          musicState.deviceId,
+
+        songId:
+          musicState.songId,
+
+        title:
+          musicState.title,
+
+        artist:
+          musicState.artist,
+
+        duration:
+          musicState.duration,
+
+        currentTime:
+          musicState.currentTime,
+
+        isPlaying:
+          musicState.isPlaying,
+
+        activeLyric:
+          musicState.activeLyric,
+
+        updatedAt:
+          musicState.updatedAt,
       },
+    );
+
+    console.log(
+      "========================================",
     );
 
     // ==================================================
@@ -435,19 +726,44 @@ export async function POST(
       success: true,
 
       music: {
-        songId: musicState.songId,
-        title: musicState.title,
-        artist: musicState.artist,
-        duration: musicState.duration,
-        currentTime: musicState.currentTime,
-        isPlaying: musicState.isPlaying,
+        songId:
+          musicState.songId,
+
+        title:
+          musicState.title,
+
+        artist:
+          musicState.artist,
+
+        duration:
+          musicState.duration,
+
+        currentTime:
+          musicState.currentTime,
+
+        isPlaying:
+          musicState.isPlaying,
+
         activeLyric:
           musicState.activeLyric,
       },
+
+      // DEBUG
+      debug: {
+        userId,
+        deviceId:
+          device.id,
+        deviceName:
+          device.name,
+      },
     });
-  } catch (error) {
+
+  } catch (
+    error
+  ) {
+
     console.error(
-      "POST /api/iot/music error:",
+      "POST /api/iot/music ERROR:",
       error,
     );
 
