@@ -9,6 +9,9 @@ const links = [
   { href: "/reflection", label: "Reflection" },
   { href: "/history", label: "History" },
   { href: "/ai", label: "AI Assistant" },
+  { href: "/music", label: "Music" },
+  { href: "/alarm", label: "Alarm" },
+  { href: "/iot", label: "IoT" },
 ];
 
 type NavLinksProps = {
