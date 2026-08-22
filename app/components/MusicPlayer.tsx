@@ -1030,7 +1030,7 @@ export default function MusicPlayer({
 
           {isDeleting
             ? "Deleting..."
-            : "🗑 Delete"}
+            : "Delete"}
 
         </button>
 
