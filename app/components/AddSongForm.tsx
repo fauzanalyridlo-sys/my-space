@@ -1,26 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import {
+  FormEvent,
+  useState,
+} from "react";
+
 import { addSong } from "@/app/actions";
 
 export default function AddSongForm() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [isOpen, setIsOpen] =
+    useState(false);
 
-  async function handleSubmit(formData: FormData) {
+  const [isSubmitting, setIsSubmitting] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
     setIsSubmitting(true);
     setError("");
 
     try {
+      const formData =
+        new FormData(event.currentTarget);
+
       await addSong(formData);
+
+      event.currentTarget.reset();
 
       setIsOpen(false);
     } catch (error) {
+      console.error(
+        "Add song client error:",
+        error,
+      );
+
       setError(
         error instanceof Error
           ? error.message
-          : "Terjadi kesalahan.",
+          : "Terjadi kesalahan saat menambahkan lagu.",
       );
     } finally {
       setIsSubmitting(false);
@@ -30,6 +53,7 @@ export default function AddSongForm() {
   if (!isOpen) {
     return (
       <button
+        type="button"
         onClick={() => {
           setError("");
           setIsOpen(true);
@@ -43,7 +67,7 @@ export default function AddSongForm() {
 
   return (
     <form
-      action={handleSubmit}
+      onSubmit={handleSubmit}
       className="mt-6 rounded-xl border border-zinc-800 p-5"
     >
       <h3 className="text-lg font-semibold">
@@ -132,7 +156,7 @@ export default function AddSongForm() {
             name="lyrics"
             accept=".lrc,text/plain"
             required
-            className="block w-full cursor-pointer rounded-lg border border-zinc-700 bg-transparent px-3 py-2 text-sm text-zinc-400 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-2 file:text-sm file:text-white"
+            className="block w-full cursor-pointer rounded-lg border border-zinc-700 bg-transparent px-3 py-2 text-sm text-zinc-400 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-2 file:text-sm file:text-zinc-400"
           />
 
           <p className="mt-1 text-xs text-zinc-600">
@@ -156,7 +180,9 @@ export default function AddSongForm() {
             disabled={isSubmitting}
             className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isSubmitting ? "Uploading..." : "Add Song"}
+            {isSubmitting
+              ? "Uploading..."
+              : "Add Song"}
           </button>
 
           <button
