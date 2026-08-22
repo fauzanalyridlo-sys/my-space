@@ -147,16 +147,20 @@ model IotDevice {
 }
 
 model IotMusicState {
-  id            Int       @id @default(autoincrement())
-  songId        String?
-  title         String?
-  artist        String?
-  duration      Int       @default(0)
-  currentTime   Float     @default(0)
-  isPlaying     Boolean   @default(false)
-  activeLyric   String?
-  updatedAt     DateTime  @updatedAt
+  id          Int      @id @default(autoincrement())
+  songId      String?
+  title       String?
+  artist      String?
+  duration    Int      @default(0)
+  currentTime Float    @default(0)
+  isPlaying   Boolean  @default(false)
+  activeLyric String?
+  updatedAt   DateTime @updatedAt
 
-  deviceId      Int       @unique
-  device        IotDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId Int       @unique
+  device   IotDevice @relation(
+    fields: [deviceId],
+    references: [id],
+    onDelete: Cascade
+  )
 }
