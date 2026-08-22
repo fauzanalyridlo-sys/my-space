@@ -7,6 +7,7 @@ import {
 
 import { addSong } from "@/app/actions";
 
+
 export default function AddSongForm() {
   const [isOpen, setIsOpen] =
     useState(false);
@@ -18,37 +19,41 @@ export default function AddSongForm() {
     useState("");
 
   async function handleSubmit(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
+  event: FormEvent<HTMLFormElement>,
+) {
+  event.preventDefault();
 
-    setIsSubmitting(true);
-    setError("");
+  // Simpan referensi form SEBELUM await
+  const form = event.currentTarget;
 
-    try {
-      const formData =
-        new FormData(event.currentTarget);
+  setIsSubmitting(true);
+  setError("");
 
-      await addSong(formData);
+  try {
+    const formData =
+      new FormData(form);
 
-      event.currentTarget.reset();
+    await addSong(formData);
 
-      setIsOpen(false);
-    } catch (error) {
-      console.error(
-        "Add song client error:",
-        error,
-      );
+    // Reset form yang sudah disimpan
+    form.reset();
 
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Terjadi kesalahan saat menambahkan lagu.",
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
+    setIsOpen(false);
+  } catch (error) {
+    console.error(
+      "Add song client error:",
+      error,
+    );
+
+    setError(
+      error instanceof Error
+        ? error.message
+        : "Terjadi kesalahan saat menambahkan lagu.",
+    );
+  } finally {
+    setIsSubmitting(false);
   }
+}
 
   if (!isOpen) {
     return (
