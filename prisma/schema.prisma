@@ -20,7 +20,7 @@ model User {
   aiMemories      AiMemory[]
   songs           Song[]
   alarms          Alarm[]
-  iotDevices IotDevice[]
+  iotDevices      IotDevice[]
 }
 
 model Note {
@@ -100,15 +100,15 @@ model AiMemory {
 }
 
 model Song {
-  id         Int      @id @default(autoincrement())
-  songId     String   @unique
-  title      String
-  artist     String?
-  audioUrl   String
-  lyricsUrl  String
-  duration   Int
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  songId    String   @unique
+  title     String
+  artist    String?
+  audioUrl  String
+  lyricsUrl String
+  duration  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   userId Int
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -137,11 +137,7 @@ model IotDevice {
   updatedAt   DateTime @updatedAt
 
   userId Int
-  user   User @relation(
-    fields: [userId],
-    references: [id],
-    onDelete: Cascade
-  )
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   musicState IotMusicState?
 }
@@ -158,9 +154,5 @@ model IotMusicState {
   updatedAt   DateTime @updatedAt
 
   deviceId Int       @unique
-  device   IotDevice @relation(
-    fields: [deviceId],
-    references: [id],
-    onDelete: Cascade
-  )
+  device   IotDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 }
