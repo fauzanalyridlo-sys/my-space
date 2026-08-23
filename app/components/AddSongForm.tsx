@@ -6,9 +6,12 @@ import {
 } from "react";
 
 import { addSong } from "@/app/actions";
-
+import Image from "next/image";
 
 export default function AddSongForm() {
+  const [coverPreview, setCoverPreview] =
+  useState<string | null>(null);
+
   const [isOpen, setIsOpen] =
     useState(false);
 
@@ -168,6 +171,65 @@ export default function AddSongForm() {
             Pilih file lirik dengan timestamp .lrc
           </p>
         </div>
+
+        {/* ========================= */}
+{/* COVER IMAGE */}
+{/* ========================= */}
+
+<div>
+  <label
+    htmlFor="cover"
+    className="mb-2 block text-sm font-medium"
+  >
+    Cover Image
+  </label>
+
+  <input
+    id="cover"
+    type="file"
+    name="cover"
+    accept="image/*"
+    required
+    onChange={(event) => {
+      const file =
+        event.target.files?.[0];
+
+      if (!file) {
+        setCoverPreview(null);
+        return;
+      }
+
+      const imageUrl =
+        URL.createObjectURL(file);
+
+      setCoverPreview(imageUrl);
+    }}
+  />
+
+  {coverPreview && (
+    <div className="mt-4">
+      <p className="mb-2 text-sm text-zinc-400">
+        Cover Preview
+      </p>
+
+      <Image
+  src={coverPreview}
+  alt="Cover preview"
+  width={192}
+  height={192}
+  unoptimized
+  className="
+    h-48
+    w-48
+    rounded-xl
+    border
+    border-zinc-700
+    object-cover
+  "
+/>
+    </div>
+  )}
+</div>
 
         {/* ERROR */}
         {error && (

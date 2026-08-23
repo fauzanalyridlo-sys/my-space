@@ -1,4 +1,10 @@
 "use client";
+import VolumeControl from "./music/VolumeControl";
+import PlayerControls from "./music/PlayerControls";
+import SongProgress from "./music/SongProgress";
+import LyricsPanel, {
+  type LyricLine,
+} from "./music/LyricsPanel";
 
 import {
   useCallback,
@@ -20,18 +26,21 @@ type MusicPlayerProps = {
   duration: number;
   isActive: boolean;
   shouldPlay: boolean;
+  playRequest: number;
   onPlay: () => void;
   onEnded: () => void;
   onPrevious: () => void;
   onNext: () => void;
   hasPrevious: boolean;
   hasNext: boolean;
+  isShuffle: boolean;
+repeatMode: "off" | "all" | "one";
+onToggleShuffle: () => void;
+onToggleRepeat: () => void;
+
 };
 
-type LyricLine = {
-  time: number;
-  text: string;
-};
+
 
 // ======================================================
 // PARSE LRC
@@ -76,41 +85,6 @@ function parseLrc(
   );
 }
 
-// ======================================================
-// FORMAT TIME
-// ======================================================
-
-function formatTime(
-  seconds: number,
-) {
-  if (
-    !Number.isFinite(seconds)
-  ) {
-    return "00:00";
-  }
-
-  const minutes =
-    Math.floor(
-      seconds / 60,
-    );
-
-  const secs =
-    Math.floor(
-      seconds % 60,
-    );
-
-  return `${String(
-    minutes,
-  ).padStart(
-    2,
-    "0",
-  )}:${String(
-    secs,
-  ).padStart(
-    2,
-    "0",
-  )}`;
-}
 
 // ======================================================
 // GET ACTIVE LYRIC
@@ -149,14 +123,18 @@ export default function MusicPlayer({
   duration,
   isActive,
   shouldPlay,
+  
+  hasPrevious,
+  hasNext,
+ isShuffle,
+  repeatMode,
   onPlay,
   onEnded,
   onPrevious,
   onNext,
-  hasPrevious,
-  hasNext,
+  onToggleShuffle,
+  onToggleRepeat,
 }: MusicPlayerProps) {
-
   // ======================================================
   // REFS
   // ======================================================
@@ -166,22 +144,16 @@ export default function MusicPlayer({
       HTMLAudioElement | null
     >(null);
 
-  const activeLyricRef =
-    useRef<
-      HTMLParagraphElement | null
-    >(null);
-
-  const lyricsContainerRef =
-    useRef<
-      HTMLDivElement | null
-    >(null);
-
   // ======================================================
   // STATE
   // ======================================================
 
+  
   const [audioUrl, setAudioUrl] =
     useState("");
+
+    const [coverUrl, setCoverUrl] =
+  useState<string | null>(null);
 
   const [lyrics, setLyrics] =
     useState<
@@ -211,6 +183,12 @@ export default function MusicPlayer({
 
   const [editError, setEditError] =
     useState("");
+
+    const [volume, setVolume] =
+  useState(1);
+
+const [isMuted, setIsMuted] =
+  useState(false);
 
   // ======================================================
   // SYNC MUSIC STATE KE API
@@ -324,12 +302,16 @@ export default function MusicPlayer({
           );
 
         setAudioUrl(
-          urls.audioUrl,
-        );
+  urls.audioUrl,
+);
 
-        setLyrics(
-          parsedLyrics,
-        );
+setCoverUrl(
+  urls.coverUrl,
+);
+
+setLyrics(
+  parsedLyrics,
+);
       } catch (error) {
 
         if (
@@ -366,77 +348,82 @@ export default function MusicPlayer({
   // STOP JIKA BUKAN LAGU AKTIF
   // ======================================================
 
-  useEffect(() => {
-    const audio =
-      audioRef.current;
+  // STOP JIKA BUKAN LAGU AKTIF
 
-    if (!audio) {
-      return;
-    }
+useEffect(() => {
+  const audio = audioRef.current;
 
-    if (
-      !isActive &&
-      !audio.paused
-    ) {
-      audio.pause();
+  if (!audio || isActive) {
+    return;
+  }
 
-      audio.currentTime = 0;
-
-      setCurrentTime(0);
-    }
-  }, [
-    isActive,
-  ]);
+  audio.pause();
+  audio.currentTime = 0;
+}, [isActive]);
 
   // ======================================================
   // AUTOPLAY
   // ======================================================
 
   useEffect(() => {
-    const audio =
-      audioRef.current;
+  const audio = audioRef.current;
 
-    if (
-      !audio ||
-      !isActive ||
-      !shouldPlay ||
-      !audioUrl
-    ) {
-      return;
-    }
+  if (
+    !audio ||
+    !isActive ||
+    !shouldPlay ||
+    !audioUrl
+  ) {
+    return;
+  }
 
-    audio
-      .play()
-      .then(
-        async () => {
-          setIsPlaying(
-            true,
-          );
+  // ==========================================
+  // RESTART SONG
+  // ==========================================
 
-          await syncMusicState(
-            true,
-            audio.currentTime,
-          );
-        },
-      )
-      .catch(
-        (error) => {
-          console.error(
-            "Autoplay error:",
-            error,
-          );
+  if (audio.ended) {
+    audio.currentTime = 0;
+  }
 
-          setError(
-            "Lagu tidak bisa diputar otomatis.",
-          );
-        },
+  audio
+    .play()
+    .then(async () => {
+      setIsPlaying(true);
+
+      setCurrentTime(
+        audio.currentTime,
       );
-  }, [
-    isActive,
-    shouldPlay,
-    audioUrl,
-    syncMusicState,
-  ]);
+
+      await syncMusicState(
+        true,
+        audio.currentTime,
+      );
+    })
+    .catch((error) => {
+      // AbortError bisa terjadi ketika
+      // audio sedang berganti/reset.
+      if (
+        error instanceof DOMException &&
+        error.name === "AbortError"
+      ) {
+        return;
+      }
+
+      console.error(
+        "Autoplay error:",
+        error,
+      );
+
+      setError(
+        "Lagu tidak bisa diputar otomatis.",
+      );
+    });
+}, [
+  isActive,
+  shouldPlay,
+  audioUrl,
+  syncMusicState,
+]);
 
   // ======================================================
   // ACTIVE LYRIC INDEX
@@ -543,54 +530,6 @@ export default function MusicPlayer({
   ]);
 
   // ======================================================
-  // AUTO SCROLL LYRICS
-  // ======================================================
-
-  useEffect(() => {
-
-    const container =
-      lyricsContainerRef.current;
-
-    const activeLyric =
-      activeLyricRef.current;
-
-    if (
-      !container ||
-      !activeLyric ||
-      activeLyricIndex === -1
-    ) {
-      return;
-    }
-
-    const containerRect =
-      container.getBoundingClientRect();
-
-    const lyricRect =
-      activeLyric.getBoundingClientRect();
-
-    const isAbove =
-      lyricRect.top <
-      containerRect.top;
-
-    const isBelow =
-      lyricRect.bottom >
-      containerRect.bottom;
-
-    if (
-      isAbove ||
-      isBelow
-    ) {
-      activeLyric.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-      });
-    }
-
-  }, [
-    activeLyricIndex,
-  ]);
-
-  // ======================================================
   // EDIT SONG
   // ======================================================
 
@@ -644,12 +583,16 @@ export default function MusicPlayer({
         );
 
       setAudioUrl(
-        urls.audioUrl,
-      );
+  urls.audioUrl,
+);
 
-      setLyrics(
-        parsedLyrics,
-      );
+setCoverUrl(
+  urls.coverUrl,
+);
+
+setLyrics(
+  parsedLyrics,
+);
 
       if (
         audioRef.current
@@ -811,249 +754,413 @@ export default function MusicPlayer({
       );
     }
   }
+  //volume control//
+  function handleVolumeChange(
+  newVolume: number,
+) {
+  setVolume(newVolume);
+
+  setIsMuted(
+    newVolume === 0,
+  );
+
+  if (audioRef.current) {
+    audioRef.current.volume =
+      newVolume;
+
+    audioRef.current.muted =
+      newVolume === 0;
+  }
+}
+//Mute / Unmute//
+function handleToggleMute() {
+  if (!audioRef.current) {
+    return;
+  }
+
+  const nextMuted =
+    !audioRef.current.muted;
+
+  audioRef.current.muted =
+    nextMuted;
+
+  setIsMuted(
+    nextMuted,
+  );
+}
+//handleSeek//
+function handleSeek(
+  time: number,
+) {
+  const audio =
+    audioRef.current;
+
+  if (!audio) {
+    return;
+  }
+
+  audio.currentTime =
+    time;
+
+  setCurrentTime(
+    time,
+  );
+}
 
   // ======================================================
   // UI
   // ======================================================
 
   return (
-    <div className="mt-5 rounded-xl border border-zinc-800 p-5">
+  <div
+    className="
+      mt-5
+      rounded-xl
+      border
+      border-zinc-800
+      p-3
+      sm:p-5
+    "
+  >
 
       {/* AUDIO */}
 
       <audio
-        ref={audioRef}
-        src={audioUrl}
+  ref={audioRef}
+  src={audioUrl}
 
-        onTimeUpdate={(
-          event,
-        ) => {
+  onTimeUpdate={(event) => {
+    setCurrentTime(
+      event.currentTarget.currentTime,
+    );
+  }}
 
-          setCurrentTime(
-            event.currentTarget
-              .currentTime,
-          );
-        }}
+  onPlay={() => {
+    setIsPlaying(true);
+  }}
 
-        onPlay={() => {
-          setIsPlaying(
-            true,
-          );
-        }}
+  onPause={() => {
+    setIsPlaying(false);
+  }}
 
-        onPause={() => {
-          setIsPlaying(
-            false,
-          );
-        }}
+  onEnded={async () => {
+  if (repeatMode === "one") {
+    const audio = audioRef.current;
 
-        onEnded={async () => {
+    if (!audio) {
+      return;
+    }
 
-          setIsPlaying(
-            false,
-          );
+    audio.currentTime = 0;
+    setCurrentTime(0);
 
-          await syncMusicState(
-            false,
-            0,
-          );
+    try {
+      await audio.play();
 
-          onEnded();
-        }}
-      />
+      setIsPlaying(true);
+
+      await syncMusicState(
+        true,
+        0,
+      );
+    } catch (error) {
+      console.error(
+        "Repeat one error:",
+        error,
+      );
+    }
+
+    return;
+  }
+
+  setIsPlaying(false);
+  setCurrentTime(0);
+
+  await syncMusicState(
+    false,
+    0,
+  );
+
+  onEnded();
+}}
+
+/>
+      {/* SONG INFO */}
+{/* PLAYER CARD */}
+
+<div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
+
+{/* COVER */}
+
+{/* COVER */}
+
+{coverUrl ? (
+  <div
+    className="
+      flex
+      justify-center
+      border-b
+      border-zinc-800
+      bg-zinc-950
+      px-4
+      py-6
+      sm:px-6
+      sm:py-8
+    "
+  >
+    <img
+      src={coverUrl}
+      alt={`${title} cover`}
+      className="
+        h-40
+        w-40
+        rounded-xl
+        object-cover
+        shadow-2xl
+        sm:h-56
+        sm:w-56
+        sm:rounded-2xl
+      "
+    />
+  </div>
+) : (
+  <div
+    className="
+      flex
+      justify-center
+      border-b
+      border-zinc-800
+      bg-zinc-950
+      px-4
+      py-6
+      sm:px-6
+      sm:py-8
+    "
+  >
+    <div
+      className="
+        flex
+        h-40
+        w-40
+        items-center
+        justify-center
+        rounded-xl
+        border
+        border-zinc-800
+        bg-zinc-900
+        text-4xl
+        text-zinc-600
+        sm:h-56
+        sm:w-56
+        sm:rounded-2xl
+        sm:text-5xl
+      "
+    >
+      ♪
+    </div>
+  </div>
+)}
+
+  {/* SONG HEADER */}
+
+  <div
+  className="
+    border-b
+    border-zinc-800
+    px-4
+    py-5
+    sm:px-6
+    sm:py-6
+  "
+>
+  <div
+    className="
+      flex
+      flex-col
+      gap-5
+      sm:flex-row
+      sm:items-start
+      sm:justify-between
+    "
+  >
 
       {/* SONG INFO */}
 
-      <div>
+      <div className="min-w-0">
 
-        <h3 className="text-lg font-semibold">
-          {title}
-        </h3>
+        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-500">
+          <span>
+            Now Playing
+          </span>
+
+          {isPlaying && (
+            <span className="flex items-center gap-1 text-white">
+              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+              Playing
+            </span>
+          )}
+        </div>
+
+        <h3
+  className="
+    mt-2
+    truncate
+    text-xl
+    font-bold
+    sm:mt-3
+    sm:text-2xl
+  "
+>
+  {title}
+</h3>
 
         {artist && (
-
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 truncate text-xs text-zinc-500 sm:text-sm">
             {artist}
           </p>
-
         )}
 
       </div>
 
-      {/* ERROR */}
+      {/* SONG ACTIONS */}
 
-      {error && (
-
-        <p className="mt-4 text-sm text-red-400">
-          {error}
-        </p>
-
-      )}
-
-      {/* PROGRESS */}
-
-      <div className="mt-5">
-
-        <input
-          type="range"
-
-          min="0"
-
-          max={duration}
-
-          step="0.1"
-
-          value={
-            Math.min(
-              currentTime,
-              duration,
-            )
-          }
-
-          onChange={(
-            event,
-          ) => {
-
-            const time =
-              Number(
-                event.target.value,
-              );
-
-            if (
-              audioRef.current
-            ) {
-
-              audioRef.current.currentTime =
-                time;
-            }
-
-            setCurrentTime(
-              time,
-            );
-          }}
-
-          className="w-full"
-        />
-
-        <div className="mt-1 flex justify-between text-xs text-zinc-500">
-
-          <span>
-            {formatTime(
-              currentTime,
-            )}
-          </span>
-
-          <span>
-            {formatTime(
-              duration,
-            )}
-          </span>
-
-        </div>
-
-      </div>
-
-      {/* CONTROLS */}
-
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+      <div
+  className="
+    flex
+    w-full
+    shrink-0
+    gap-2
+    sm:w-auto
+  "
+>
 
         <button
           type="button"
-
-          onClick={
-            onPrevious
-          }
-
-          disabled={
-            !isActive ||
-            !hasPrevious
-          }
-
-          className="rounded-lg border border-zinc-700 px-4 py-2 text-sm disabled:opacity-30"
-        >
-          ⏮ Previous
-        </button>
-
-        <button
-          type="button"
-
-          onClick={
-            togglePlay
-          }
-
-          disabled={
-            loading ||
-            !audioUrl
-          }
-
-          className="rounded-lg bg-white px-5 py-2 text-sm font-medium text-black disabled:opacity-50"
-        >
-
-          {loading
-            ? "Loading..."
-            : isPlaying
-              ? "⏸ Pause"
-              : "▶ Play"}
-
-        </button>
-
-        <button
-          type="button"
-
-          onClick={
-            onNext
-          }
-
-          disabled={
-            !isActive ||
-            !hasNext
-          }
-
-          className="rounded-lg border border-zinc-700 px-4 py-2 text-sm disabled:opacity-30"
-        >
-          Next ⏭
-        </button>
-
-        <button
-          type="button"
-
-          onClick={
-            handleDelete
-          }
-
-          disabled={
-            isDeleting
-          }
-
-          className="rounded-lg border border-red-900 px-4 py-2 text-sm text-red-400 transition hover:bg-red-950 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-
-          {isDeleting
-            ? "Deleting..."
-            : "Delete"}
-
-        </button>
-
-        <button
-          type="button"
-
           onClick={() => {
-
-            setEditError(
-              "",
-            );
-
-            setIsEditing(
-              true,
-            );
+            setEditError("");
+            setIsEditing(true);
           }}
-
-          className="rounded-lg border border-zinc-700 px-4 py-2 text-sm"
+          className="
+  flex-1
+  rounded-lg
+  border
+  border-zinc-700
+  px-3
+  py-2
+  text-sm
+  text-zinc-300
+  transition
+  hover:bg-zinc-900
+  sm:flex-none
+"
         >
           Edit
         </button>
 
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={isDeleting}
+          className="
+  flex-1
+  rounded-lg
+  border
+  border-red-900
+  px-3
+  py-2
+  text-sm
+  text-red-400
+  transition
+  hover:bg-red-950
+  disabled:cursor-not-allowed
+  disabled:opacity-50
+  sm:flex-none
+"
+        >
+          {isDeleting
+            ? "Deleting..."
+            : "Delete"}
+        </button>
+
       </div>
+
+    </div>
+
+  </div>
+
+
+  {/* PLAYER */}
+
+  <div
+  className="
+    px-4
+    py-5
+    sm:px-6
+    sm:py-6
+  "
+>
+
+    {/* ERROR */}
+
+    {error && (
+      <p className="mb-4 text-sm text-red-400">
+        {error}
+      </p>
+    )}
+
+
+   {/* PROGRESS */}
+
+<SongProgress
+  currentTime={currentTime}
+  duration={duration}
+  onSeek={handleSeek}
+/>
+
+
+    {/* CONTROLS */}
+
+    <div
+  className="
+    mt-6
+    flex
+    flex-col
+    items-center
+    justify-center
+    gap-5
+    sm:mt-8
+    sm:flex-row
+    sm:gap-6
+  "
+>
+
+      <PlayerControls
+    isPlaying={isPlaying}
+    loading={loading}
+    hasPrevious={hasPrevious}
+    hasNext={hasNext}
+    isActive={isActive}
+    onPrevious={onPrevious}
+    onTogglePlay={togglePlay}
+    onNext={onNext}
+     isShuffle={isShuffle}
+  repeatMode={repeatMode}
+  onToggleShuffle={onToggleShuffle}
+  onToggleRepeat={onToggleRepeat}
+/>
+
+  <VolumeControl
+    volume={volume}
+    isMuted={isMuted}
+    onVolumeChange={handleVolumeChange}
+    onToggleMute={handleToggleMute}
+  />
+
+    </div>
+
+  </div>
+
+</div>
 
       {/* EDIT FORM */}
 
@@ -1064,7 +1171,14 @@ export default function MusicPlayer({
             handleEdit
           }
 
-          className="mt-5 rounded-xl border border-zinc-800 p-5"
+          className="
+  mt-5
+  rounded-xl
+  border
+  border-zinc-800
+  p-4
+  sm:p-5
+"
         >
 
           <h4 className="text-lg font-semibold">
@@ -1141,51 +1255,65 @@ export default function MusicPlayer({
 
             </div>
 
-            <div>
+              {/* REPLACE MP3 */}
 
-              <label className="mb-1 block text-sm text-zinc-400">
-                Replace MP3
-              </label>
+<div>
+  <label className="mb-1 block text-sm text-zinc-400">
+    Replace MP3
+  </label>
 
-              <input
-                type="file"
+  <input
+    type="file"
+    name="audio"
+    accept=".mp3,audio/mpeg"
+    className="block w-full text-sm text-zinc-400"
+  />
 
-                name="audio"
+  <p className="mt-1 text-xs text-zinc-600">
+    Kosongkan jika tidak ingin
+    mengganti MP3.
+  </p>
+</div>
 
-                accept=".mp3,audio/mpeg"
+{/* REPLACE LRC */}
 
-                className="block w-full text-sm text-zinc-400"
-              />
+<div>
+  <label className="mb-1 block text-sm text-zinc-400">
+    Replace LRC
+  </label>
 
-              <p className="mt-1 text-xs text-zinc-600">
-                Kosongkan jika tidak ingin
-                mengganti MP3.
-              </p>
+  <input
+    type="file"
+    name="lyrics"
+    accept=".lrc,text/plain"
+    className="block w-full text-sm text-zinc-400"
+  />
 
-            </div>
+  <p className="mt-1 text-xs text-zinc-600">
+    Kosongkan jika tidak ingin
+    mengganti lirik.
+  </p>
+</div>
 
-            <div>
+{/* REPLACE COVER */}
 
-              <label className="mb-1 block text-sm text-zinc-400">
-                Replace LRC
-              </label>
+<div>
+  <label className="mb-1 block text-sm text-zinc-400">
+    Replace Cover
+  </label>
 
-              <input
-                type="file"
+  <input
+    type="file"
+    name="cover"
+    accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+    className="block w-full text-sm text-zinc-400"
+  />
 
-                name="lyrics"
-
-                accept=".lrc,text/plain"
-
-                className="block w-full text-sm text-zinc-400"
-              />
-
-              <p className="mt-1 text-xs text-zinc-600">
-                Kosongkan jika tidak ingin
-                mengganti lirik.
-              </p>
-
-            </div>
+  <p className="mt-1 text-xs text-zinc-600">
+    Kosongkan jika tidak ingin
+    mengganti cover.
+  </p>
+</div>
 
             {editError && (
 
@@ -1195,7 +1323,15 @@ export default function MusicPlayer({
 
             )}
 
-            <div className="flex gap-3">
+<div
+  className="
+  w-full sm:w-auto
+    flex
+    flex-col
+    gap-3
+    sm:flex-row
+  "
+>
 
               <button
                 type="submit"
@@ -1246,84 +1382,12 @@ export default function MusicPlayer({
 
       {/* LYRICS */}
 
-      <div
-        ref={
-          lyricsContainerRef
-        }
-
-        className="mt-6 h-64 overflow-y-auto rounded-lg bg-zinc-950 p-4"
-      >
-
-        {lyrics.length === 0 ? (
-
-          <p className="text-sm text-zinc-600">
-            Lirik belum tersedia.
-          </p>
-
-        ) : (
-
-          <div className="space-y-3">
-
-            {lyrics.map(
-              (
-                lyric,
-                index,
-              ) => {
-
-                const distance =
-                  Math.abs(
-                    index -
-                    activeLyricIndex,
-                  );
-
-                const lyricIsActive =
-                  index ===
-                  activeLyricIndex;
-
-                let lyricClass =
-                  "text-sm text-zinc-700 opacity-40";
-
-                if (
-                  distance === 1
-                ) {
-
-                  lyricClass =
-                    "text-base text-zinc-400 opacity-70";
-                }
-
-                if (
-                  lyricIsActive
-                ) {
-
-                  lyricClass =
-                    "scale-105 text-lg font-bold text-white opacity-100";
-                }
-
-                return (
-
-                  <p
-                    key={`${lyric.time}-${index}`}
-
-                    ref={
-                      lyricIsActive
-                        ? activeLyricRef
-                        : null
-                    }
-
-                    className={`origin-center transition-all duration-300 ease-out ${lyricClass}`}
-                  >
-                    {lyric.text}
-                  </p>
-
-                );
-              },
-            )}
-
-          </div>
-
-        )}
-
-      </div>
+<LyricsPanel
+  lyrics={lyrics}
+  activeLyricIndex={
+    activeLyricIndex
+  }
+/>
 
     </div>
   );

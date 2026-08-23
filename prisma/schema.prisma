@@ -109,7 +109,7 @@ model Song {
   duration  Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
+coverUrl String?
   userId Int
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -156,3 +156,4 @@ model IotMusicState {
   deviceId Int       @unique
   device   IotDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 }
+

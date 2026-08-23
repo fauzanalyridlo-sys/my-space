@@ -270,8 +270,10 @@ export async function addSong(formData: FormData) {
   const duration = formData.get("duration");
 
   const audioFile = formData.get("audio");
-  const lyricsFile = formData.get("lyrics");
 
+const lyricsFile = formData.get("lyrics");
+
+const coverFile = formData.get("cover");
   // =========================
   // VALIDASI DATA
   // =========================
@@ -318,6 +320,29 @@ export async function addSong(formData: FormData) {
   }
 
   // =========================
+// VALIDASI COVER
+// =========================
+
+if (
+  !(coverFile instanceof File) ||
+  coverFile.size === 0
+) {
+  throw new Error(
+    "Cover lagu wajib dipilih.",
+  );
+}
+
+if (
+  !coverFile.type.startsWith(
+    "image/",
+  )
+) {
+  throw new Error(
+    "File cover harus berupa gambar.",
+  );
+}
+
+  // =========================
   // BUAT ID LAGU
   // =========================
 
@@ -325,8 +350,20 @@ export async function addSong(formData: FormData) {
 
   const folder = `user_${userId}/${songId}`;
 
-  const audioPath = `${folder}/audio.mp3`;
-  const lyricsPath = `${folder}/lyrics.lrc`;
+  const audioPath =
+  `${folder}/audio.mp3`;
+
+const lyricsPath =
+  `${folder}/lyrics.lrc`;
+
+const coverExtension =
+  coverFile.name
+    .split(".")
+    .pop()
+    ?.toLowerCase() ?? "jpg";
+
+const coverPath =
+  `${folder}/cover.${coverExtension}`;
 
   try {
     // =========================
@@ -379,6 +416,41 @@ export async function addSong(formData: FormData) {
     }
 
     // =========================
+// UPLOAD COVER
+// =========================
+
+const coverBuffer = Buffer.from(
+  await coverFile.arrayBuffer(),
+);
+
+const { error: coverError } =
+  await supabase.storage
+    .from("music")
+    .upload(
+      coverPath,
+      coverBuffer,
+      {
+        contentType:
+          coverFile.type,
+        upsert: false,
+      },
+    );
+
+if (coverError) {
+  // Bersihkan file yang sudah terupload
+  await supabase.storage
+    .from("music")
+    .remove([
+      audioPath,
+      lyricsPath,
+    ]);
+
+  throw new Error(
+    `Upload cover gagal: ${coverError.message}`,
+  );
+}
+
+    // =========================
     // SIMPAN DATABASE
     // =========================
 
@@ -389,6 +461,7 @@ export async function addSong(formData: FormData) {
         artist: artist.trim(),
         audioUrl: audioPath,
         lyricsUrl: lyricsPath,
+        coverUrl: coverPath,
         duration: durationNumber,
         userId,
       },
@@ -479,12 +552,14 @@ export async function updateSong(
   const duration = formData.get("duration");
 
   const audioFile = formData.get("audio");
+
   const lyricsFile = formData.get("lyrics");
+
+  const coverFile = formData.get("cover");
 
   if (typeof title !== "string" || !title.trim()) {
     throw new Error("Judul lagu wajib diisi.");
   }
-
   if (typeof artist !== "string" || !artist.trim()) {
     throw new Error("Artist wajib diisi.");
   }
@@ -513,8 +588,10 @@ export async function updateSong(
     }
 
     let audioPath = song.audioUrl;
-    let lyricsPath = song.lyricsUrl;
 
+let lyricsPath = song.lyricsUrl;
+
+let coverPath = song.coverUrl;
     // =========================
     // UPDATE MP3 JIKA DIPILIH
     // =========================
@@ -580,6 +657,68 @@ export async function updateSong(
     }
 
     // =========================
+// UPDATE COVER JIKA DIPILIH
+// =========================
+
+if (
+  coverFile instanceof File &&
+  coverFile.size > 0
+) {
+  const allowedTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+  ];
+
+  if (
+    !allowedTypes.includes(
+      coverFile.type,
+    )
+  ) {
+    throw new Error(
+      "Cover harus berformat JPG, PNG, atau WEBP.",
+    );
+  }
+
+  const extension =
+    coverFile.type === "image/png"
+      ? "png"
+      : coverFile.type === "image/webp"
+        ? "webp"
+        : "jpg";
+
+  const newCoverPath =
+    `user_${userId}/${song.songId}/cover.${extension}`;
+
+  const coverBuffer =
+    Buffer.from(
+      await coverFile.arrayBuffer(),
+    );
+
+  const { error } =
+    await supabase.storage
+      .from("music")
+      .upload(
+        newCoverPath,
+        coverBuffer,
+        {
+          contentType:
+            coverFile.type,
+          upsert: true,
+        },
+      );
+
+  if (error) {
+    throw new Error(
+      `Upload cover gagal: ${error.message}`,
+    );
+  }
+
+  coverPath =
+    newCoverPath;
+}
+
+    // =========================
     // UPDATE DATABASE
     // =========================
 
@@ -588,12 +727,13 @@ export async function updateSong(
         id: song.id,
       },
       data: {
-        title: title.trim(),
-        artist: artist.trim(),
-        duration: durationNumber,
-        audioUrl: audioPath,
-        lyricsUrl: lyricsPath,
-      },
+  title: title.trim(),
+  artist: artist.trim(),
+  duration: durationNumber,
+  audioUrl: audioPath,
+  lyricsUrl: lyricsPath,
+  coverUrl: coverPath,
+},
     });
 
     revalidatePath("/music");
@@ -831,46 +971,96 @@ export async function getSongUrls(songId: string) {
   if (!songId || typeof songId !== "string") {
     throw new Error("Song ID tidak valid.");
   }
-
   const song = await prisma.song.findFirst({
     where: {
       songId,
       userId,
     },
   });
-
   if (!song) {
     throw new Error("Lagu tidak ditemukan.");
   }
+  // =========================
+  // SIGNED URL AUDIO
+  // =========================
+  const {
+    data: audioData,
+    error: audioError,
+  } = await supabase.storage
+    .from("music")
+    .createSignedUrl(
+      song.audioUrl,
+      60 * 60,
+    );
 
-  const { data: audioData, error: audioError } =
-    await supabase.storage
-      .from("music")
-      .createSignedUrl(song.audioUrl, 60 * 60);
-
-  if (audioError || !audioData?.signedUrl) {
+  if (
+    audioError ||
+    !audioData?.signedUrl
+  ) {
     throw new Error(
       `Gagal membuat URL MP3: ${
-        audioError?.message ?? "Unknown error"
+        audioError?.message ??
+        "Unknown error"
       }`,
     );
   }
+  // =========================
+  // SIGNED URL LYRICS
+  // =========================
+  const {
+    data: lyricsData,
+    error: lyricsError,
+  } = await supabase.storage
+    .from("music")
+    .createSignedUrl(
+      song.lyricsUrl,
+      60 * 60,
+    );
 
-  const { data: lyricsData, error: lyricsError } =
-    await supabase.storage
-      .from("music")
-      .createSignedUrl(song.lyricsUrl, 60 * 60);
-
-  if (lyricsError || !lyricsData?.signedUrl) {
+  if (
+    lyricsError ||
+    !lyricsData?.signedUrl
+  ) {
     throw new Error(
       `Gagal membuat URL LRC: ${
-        lyricsError?.message ?? "Unknown error"
+        lyricsError?.message ??
+        "Unknown error"
       }`,
     );
   }
+  // =========================
+  // SIGNED URL COVER
+  // =========================
+  let coverUrl: string | null = null;
 
+  if (song.coverUrl) {
+    const {
+      data: coverData,
+      error: coverError,
+    } = await supabase.storage
+      .from("music")
+      .createSignedUrl(
+        song.coverUrl,
+        60 * 60,
+      );
+
+    if (
+      coverError ||
+      !coverData?.signedUrl
+    ) {
+      throw new Error(
+        `Gagal membuat URL Cover: ${
+          coverError?.message ??
+          "Unknown error"
+        }`,
+      );
+    }
+    coverUrl =
+      coverData.signedUrl;
+  }
   return {
     audioUrl: audioData.signedUrl,
     lyricsUrl: lyricsData.signedUrl,
+    coverUrl,
   };
 }
