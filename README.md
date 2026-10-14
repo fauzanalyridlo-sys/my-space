@@ -113,6 +113,8 @@ The application will evolve together with my daily life.
 
 ---
 
+## Game City Adventure (in the development stage)
+
 ## 🏗️ Architecture
 
 The application currently follows a simple Next.js architecture:
